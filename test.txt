@@ -1,0 +1,3600 @@
+import Vue from 'vue'
+import VueRouter from 'vue-router'
+import { sync } from 'vuex-router-sync'
+
+Vue.use(VueRouter)
+import App from './App'
+import Vuex from 'vuex'
+Vue.use(Vuex)
+//import router from './router'
+import vuexI18n from 'vuex-i18n'
+
+require('es6-promise').polyfill()
+
+/**
+ * you can add your module here
+ */
+let store = new Vuex.Store({
+  modules: {
+    i18n: vuexI18n.store
+  }
+})
+
+store.registerModule('vux', {
+  state: {
+    demoScrollTop: 0,
+    isLoading: false,
+    direction: 'forward'
+  },
+  mutations: {
+    updateDemoPosition (state, payload) {
+      state.demoScrollTop = payload.top
+    },
+    updateLoadingStatus (state, payload) {
+      state.isLoading = payload.isLoading
+    },
+    updateDirection (state, payload) {
+      state.direction = payload.direction
+    }
+  },
+  actions: {
+    updateDemoPosition ({commit}, top) {
+      commit({type: 'updateDemoPosition', top: top})
+    }
+  }
+})
+
+Vue.use(vuexI18n.plugin, store)
+
+// plugins
+import LocalePlugin from './plugins/locale/index.js'
+import DevicePlugin from './plugins/device/index.js'
+import ToastPlugin from './plugins/toast/index.js'
+import AlertPlugin from './plugins/alert/index.js'
+import ConfirmPlugin from './plugins/confirm/index.js'
+import LoadingPlugin from './plugins/loading/index.js'
+import WechatPlugin from './plugins/wechat/index.js'
+import AjaxPlugin from './plugins/ajax/index.js'
+import AppPlugin from './plugins/app/index.js'
+
+Vue.use(DevicePlugin)
+Vue.use(ToastPlugin)
+Vue.use(AlertPlugin)
+Vue.use(ConfirmPlugin)
+Vue.use(LoadingPlugin)
+Vue.use(WechatPlugin)
+Vue.use(AjaxPlugin)
+Vue.use(LocalePlugin)
+
+// test
+if (process.env.platform === 'app') {
+  Vue.use(AppPlugin, store)
+}
+
+const wx = Vue.wechat
+const http = Vue.http
+
+/**
+ * -------------------------- 微信分享 ----------------------
+ * 请不要直接复制下面代码
+ */
+
+if (process.env.NODE_ENV === 'production') {
+  wx.ready(() => {
+    console.log('wechat ready')
+    wx.onMenuShareAppMessage({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_message',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+
+    wx.onMenuShareTimeline({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_timeline',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+  })
+
+  const permissions = JSON.stringify(['onMenuShareTimeline', 'onMenuShareAppMessage'])
+  const url = document.location.href
+  http.post('https://vux.li/jssdk?url=' + encodeURIComponent(url.split('#')[0]) + '&jsApiList=' + permissions).then(res => {
+    wx.config(res.data.data)
+  })
+}
+
+import objectAssign from 'object-assign'
+
+const vuxLocales = require('json-loader!yaml-loader!./locales/all.yml')
+//const componentsLocales = require('json-loader!yaml-loader!src/locales/components.yml')
+/*
+const globalLocales = require('json-loader!yaml-loader!src/locales/global_locales.yml') || {en: {}, 'zh-CN': {}}
+*/
+
+/*const finalLocales = {
+  'en': objectAssign(vuxLocales['en'], componentsLocales['en'], globalLocales['en']),
+  'zh-CN': objectAssign(vuxLocales['zh-CN'], componentsLocales['zh-CN'], globalLocales['zh-CN'])
+}*/
+
+/*for (let i in finalLocales) {
+  Vue.i18n.add(i, finalLocales[i])
+}*/
+
+const nowLocale = Vue.locale.get()
+if (/zh/.test(nowLocale)) {
+  Vue.i18n.set('zh-CN')
+} else {
+  Vue.i18n.set('en')
+}
+
+const FastClick = require('fastclick')
+FastClick.attach(document.body)
+
+import demo from '@/demos/Demo'
+// The following line will be replaced with by vux-loader with routes in ./demo_list.json
+const routes =  [
+ {
+ path: '/app',
+ component: App
+ },
+ {
+ path: '/demo',
+ component: demo
+ },
+ ]
+
+const router = new VueRouter({
+  routes
+})
+
+sync(store, router)
+
+// simple history management
+const history = window.sessionStorage
+history.clear()
+let historyCount = history.getItem('count') * 1 || 0
+history.setItem('/', 0)
+
+router.beforeEach(function (to, from, next) {
+  store.commit('updateLoadingStatus', {isLoading: true})
+
+  const toIndex = history.getItem(to.path)
+  const fromIndex = history.getItem(from.path)
+
+  if (toIndex) {
+    if (!fromIndex || parseInt(toIndex, 10) > parseInt(fromIndex, 10) || (toIndex === '0' && fromIndex === '0')) {
+      store.commit('updateDirection', {direction: 'forward'})
+    } else {
+      store.commit('updateDirection', {direction: 'reverse'})
+    }
+  } else {
+    ++historyCount
+    history.setItem('count', historyCount)
+    to.path !== '/' && history.setItem(to.path, historyCount)
+    store.commit('updateDirection', {direction: 'forward'})
+  }
+
+  if (/\/http/.test(to.path)) {
+    let url = to.path.split('http')[1]
+    window.location.href = `http${url}`
+  } else {
+    next()
+  }
+})
+
+router.afterEach(function (to) {
+  store.commit('updateLoadingStatus', {isLoading: false})
+  if (process.env.NODE_ENV === 'production') {
+    ga && ga('set', 'page', to.fullPath)
+    ga && ga('send', 'pageview')
+  }
+})
+
+new Vue({
+  store,
+  router,
+  render: h => h(App)
+}).$mount('#app')
+import Vue from 'vue'
+import VueRouter from 'vue-router'
+import { sync } from 'vuex-router-sync'
+
+Vue.use(VueRouter)
+import App from './App'
+import Vuex from 'vuex'
+Vue.use(Vuex)
+//import router from './router'
+import vuexI18n from 'vuex-i18n'
+
+require('es6-promise').polyfill()
+
+/**
+ * you can add your module here
+ */
+let store = new Vuex.Store({
+  modules: {
+    i18n: vuexI18n.store
+  }
+})
+
+store.registerModule('vux', {
+  state: {
+    demoScrollTop: 0,
+    isLoading: false,
+    direction: 'forward'
+  },
+  mutations: {
+    updateDemoPosition (state, payload) {
+      state.demoScrollTop = payload.top
+    },
+    updateLoadingStatus (state, payload) {
+      state.isLoading = payload.isLoading
+    },
+    updateDirection (state, payload) {
+      state.direction = payload.direction
+    }
+  },
+  actions: {
+    updateDemoPosition ({commit}, top) {
+      commit({type: 'updateDemoPosition', top: top})
+    }
+  }
+})
+
+Vue.use(vuexI18n.plugin, store)
+
+// plugins
+import LocalePlugin from './plugins/locale/index.js'
+import DevicePlugin from './plugins/device/index.js'
+import ToastPlugin from './plugins/toast/index.js'
+import AlertPlugin from './plugins/alert/index.js'
+import ConfirmPlugin from './plugins/confirm/index.js'
+import LoadingPlugin from './plugins/loading/index.js'
+import WechatPlugin from './plugins/wechat/index.js'
+import AjaxPlugin from './plugins/ajax/index.js'
+import AppPlugin from './plugins/app/index.js'
+
+Vue.use(DevicePlugin)
+Vue.use(ToastPlugin)
+Vue.use(AlertPlugin)
+Vue.use(ConfirmPlugin)
+Vue.use(LoadingPlugin)
+Vue.use(WechatPlugin)
+Vue.use(AjaxPlugin)
+Vue.use(LocalePlugin)
+
+// test
+if (process.env.platform === 'app') {
+  Vue.use(AppPlugin, store)
+}
+
+const wx = Vue.wechat
+const http = Vue.http
+
+/**
+ * -------------------------- 微信分享 ----------------------
+ * 请不要直接复制下面代码
+ */
+
+if (process.env.NODE_ENV === 'production') {
+  wx.ready(() => {
+    console.log('wechat ready')
+    wx.onMenuShareAppMessage({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_message',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+
+    wx.onMenuShareTimeline({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_timeline',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+  })
+
+  const permissions = JSON.stringify(['onMenuShareTimeline', 'onMenuShareAppMessage'])
+  const url = document.location.href
+  http.post('https://vux.li/jssdk?url=' + encodeURIComponent(url.split('#')[0]) + '&jsApiList=' + permissions).then(res => {
+    wx.config(res.data.data)
+  })
+}
+
+import objectAssign from 'object-assign'
+
+const vuxLocales = require('json-loader!yaml-loader!./locales/all.yml')
+//const componentsLocales = require('json-loader!yaml-loader!src/locales/components.yml')
+/*
+const globalLocales = require('json-loader!yaml-loader!src/locales/global_locales.yml') || {en: {}, 'zh-CN': {}}
+*/
+
+/*const finalLocales = {
+  'en': objectAssign(vuxLocales['en'], componentsLocales['en'], globalLocales['en']),
+  'zh-CN': objectAssign(vuxLocales['zh-CN'], componentsLocales['zh-CN'], globalLocales['zh-CN'])
+}*/
+
+/*for (let i in finalLocales) {
+  Vue.i18n.add(i, finalLocales[i])
+}*/
+
+const nowLocale = Vue.locale.get()
+if (/zh/.test(nowLocale)) {
+  Vue.i18n.set('zh-CN')
+} else {
+  Vue.i18n.set('en')
+}
+
+const FastClick = require('fastclick')
+FastClick.attach(document.body)
+
+import demo from '@/demos/Demo'
+// The following line will be replaced with by vux-loader with routes in ./demo_list.json
+const routes = [{
+  path: '/component/cell',
+  component: function (resolve) {
+    require(['./demos/Cell.vue'], resolve)
+  }
+},
+{
+  path: '/css/1px',
+  component: function (resolve) {
+    require(['./demos/OnePx.vue'], resolve)
+  }
+},
+{
+  path: '/component/actionsheet',
+  component: function (resolve) {
+    require(['./demos/Actionsheet.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-switch',
+  component: function (resolve) {
+    require(['./demos/XSwitch.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-address',
+  component: function (resolve) {
+    require(['./demos/XAddress.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup',
+  component: function (resolve) {
+    require(['./demos/Popup.vue'], resolve)
+  }
+},
+{
+  path: '/component/picker',
+  component: function (resolve) {
+    require(['./demos/Picker.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup-picker',
+  component: function (resolve) {
+    require(['./demos/PopupPicker.vue'], resolve)
+  }
+},
+{
+  path: '/component/alert',
+  component: function (resolve) {
+    require(['./demos/Alert.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-dialog',
+  component: function (resolve) {
+    require(['./demos/XDialog.vue'], resolve)
+  }
+},
+{
+  path: '/component/badge',
+  component: function (resolve) {
+    require(['./demos/Badge.vue'], resolve)
+  }
+},
+{
+  path: '/component/button-tab',
+  component: function (resolve) {
+    require(['./demos/ButtonTab.vue'], resolve)
+  }
+},
+{
+  path: '/component/checker',
+  component: function (resolve) {
+    require(['./demos/Checker.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-circle',
+  component: function (resolve) {
+    require(['./demos/XCircle.vue'], resolve)
+  }
+},
+{
+  path: '/component/radio',
+  component: function (resolve) {
+    require(['./demos/Radio.vue'], resolve)
+  }
+},
+{
+  path: '/component/demo',
+  component: function (resolve) {
+    require(['./demos/Demo.vue'], resolve)
+  }
+},
+{
+  path: '/component/confirm',
+  component: function (resolve) {
+    require(['./demos/Confirm.vue'], resolve)
+  }
+},
+{
+  path: '/component/blur',
+  component: function (resolve) {
+    require(['./demos/Blur.vue'], resolve)
+  }
+},
+{
+  path: '/component/calendar',
+  component: function (resolve) {
+    require(['./demos/Calendar.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-number',
+  component: function (resolve) {
+    require(['./demos/XNumber.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar',
+  component: function (resolve) {
+    require(['./demos/Tabbar.vue'], resolve)
+  }
+},
+{
+  path: '/component/tab',
+  component: function (resolve) {
+    require(['./demos/Tab.vue'], resolve)
+  }
+},
+{
+  path: '/component/swiper',
+  component: function (resolve) {
+    require(['./demos/Swiper.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller',
+  component: function (resolve) {
+    require(['./demos/Scroller.vue'], resolve)
+  }
+},
+{
+  path: '/component/pulldown',
+  component: function (resolve) {
+    require(['./demos/Pulldown.vue'], resolve)
+  }
+},
+{
+  path: '/component/pullup',
+  component: function (resolve) {
+    require(['./demos/Pullup.vue'], resolve)
+  }
+},
+{
+  path: '/component/pulldown-pullup',
+  component: function (resolve) {
+    require(['./demos/PulldownPullup.vue'], resolve)
+  }
+},
+{
+  path: '/component/toast',
+  component: function (resolve) {
+    require(['./demos/Toast.vue'], resolve)
+  }
+},
+{
+  path: '/component/reddot',
+  component: function (resolve) {
+    require(['./demos/Reddot.vue'], resolve)
+  }
+},
+{
+  path: '/component/divider',
+  component: function (resolve) {
+    require(['./demos/Divider.vue'], resolve)
+  }
+},
+{
+  path: '/component/checklist',
+  component: function (resolve) {
+    require(['./demos/Checklist.vue'], resolve)
+  }
+},
+{
+  path: '/component/issue702',
+  component: function (resolve) {
+    require(['./demos/Issue702.vue'], resolve)
+  }
+},
+{
+  path: '/component/selector',
+  component: function (resolve) {
+    require(['./demos/Selector.vue'], resolve)
+  }
+},
+{
+  path: '/component/panel',
+  component: function (resolve) {
+    require(['./demos/Panel.vue'], resolve)
+  }
+},
+{
+  path: '/component/inline-calendar',
+  component: function (resolve) {
+    require(['./demos/InlineCalendar.vue'], resolve)
+  }
+},
+{
+  path: '/component/datetime',
+  component: function (resolve) {
+    require(['./demos/Datetime.vue'], resolve)
+  }
+},
+{
+  path: '/component/range',
+  component: function (resolve) {
+    require(['./demos/Range.vue'], resolve)
+  }
+},
+{
+  path: '/component/rater',
+  component: function (resolve) {
+    require(['./demos/Rater.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-button',
+  component: function (resolve) {
+    require(['./demos/XButton.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-input',
+  component: function (resolve) {
+    require(['./demos/XInput.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-textarea',
+  component: function (resolve) {
+    require(['./demos/XTextarea.vue'], resolve)
+  }
+},
+{
+  path: '/component/loading',
+  component: function (resolve) {
+    require(['./demos/Loading.vue'], resolve)
+  }
+},
+{
+  path: '/component/popover',
+  component: function (resolve) {
+    require(['./demos/Popover.vue'], resolve)
+  }
+},
+{
+  path: '/component/countup',
+  component: function (resolve) {
+    require(['./demos/Countup.vue'], resolve)
+  }
+},
+{
+  path: '/component/countdown',
+  component: function (resolve) {
+    require(['./demos/Countdown.vue'], resolve)
+  }
+},
+{
+  path: '/component/clocker',
+  component: function (resolve) {
+    require(['./demos/Clocker.vue'], resolve)
+  }
+},
+{
+  path: '/component/flexbox',
+  component: function (resolve) {
+    require(['./demos/Flexbox.vue'], resolve)
+  }
+},
+{
+  path: '/component/icon',
+  component: function (resolve) {
+    require(['./demos/Icon.vue'], resolve)
+  }
+},
+{
+  path: '/component/card',
+  component: function (resolve) {
+    require(['./demos/Card.vue'], resolve)
+  }
+},
+{
+  path: '/component/previewer',
+  component: function (resolve) {
+    require(['./demos/Previewer.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-progress',
+  component: function (resolve) {
+    require(['./demos/XProgress.vue'], resolve)
+  }
+},
+{
+  path: '/component/sticky',
+  component: function (resolve) {
+    require(['./demos/Sticky.vue'], resolve)
+  }
+},
+{
+  path: '/component/search',
+  component: function (resolve) {
+    require(['./demos/Search.vue'], resolve)
+  }
+},
+{
+  path: '/component/search-static',
+  component: function (resolve) {
+    require(['./demos/SearchStatic.vue'], resolve)
+  }
+},
+{
+  path: '/component/spinner',
+  component: function (resolve) {
+    require(['./demos/Spinner.vue'], resolve)
+  }
+},
+{
+  path: '/component/timeline',
+  component: function (resolve) {
+    require(['./demos/Timeline.vue'], resolve)
+  }
+},
+{
+  path: '/component/step',
+  component: function (resolve) {
+    require(['./demos/Step.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-header',
+  component: function (resolve) {
+    require(['./demos/XHeader.vue'], resolve)
+  }
+},
+{
+  path: '/component/qrcode',
+  component: function (resolve) {
+    require(['./demos/Qrcode.vue'], resolve)
+  }
+},
+{
+  path: '/component/masker',
+  component: function (resolve) {
+    require(['./demos/Masker.vue'], resolve)
+  }
+},
+{
+  path: '/component/close',
+  component: function (resolve) {
+    require(['./demos/Close.vue'], resolve)
+  }
+},
+{
+  path: '/component/center',
+  component: function (resolve) {
+    require(['./demos/Center.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-img',
+  component: function (resolve) {
+    require(['./demos/XImg.vue'], resolve)
+  }
+},
+{
+  path: '/component/wechat-emotion',
+  component: function (resolve) {
+    require(['./demos/WechatEmotion.vue'], resolve)
+  }
+},
+{
+  path: '/component/color-picker',
+  component: function (resolve) {
+    require(['./demos/ColorPicker.vue'], resolve)
+  }
+},
+{
+  path: '/component/form-preview',
+  component: function (resolve) {
+    require(['./demos/FormPreview.vue'], resolve)
+  }
+},
+{
+  path: '/component/load-more',
+  component: function (resolve) {
+    require(['./demos/LoadMore.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-full',
+  component: function (resolve) {
+    require(['./demos/ScrollerFull.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-header',
+  component: function (resolve) {
+    require(['./demos/ScrollerHeader.vue'], resolve)
+  }
+},
+{
+  path: '/component/grid',
+  component: function (resolve) {
+    require(['./demos/Grid.vue'], resolve)
+  }
+},
+{
+  path: '/component/group',
+  component: function (resolve) {
+    require(['./demos/Group.vue'], resolve)
+  }
+},
+{
+  path: '/component/view-box',
+  component: function (resolve) {
+    require(['./demos/ViewBox.vue'], resolve)
+  }
+},
+{
+  path: '/',
+  component: function (resolve) {
+    require(['./demos/Home.vue'], resolve)
+  }
+},
+{
+  path: '/project/donate',
+  component: function (resolve) {
+    require(['./demos/Donate.vue'], resolve)
+  }
+},
+{
+  path: '/demo',
+  component: function (resolve) {
+    require(['./demos/Demo.vue'], resolve)
+  }
+},
+{
+  path: '/component/format-time',
+  component: function (resolve) {
+    require(['./demos/FormatTime.vue'], resolve)
+  }
+},
+{
+  path: '/component/uploader',
+  component: function (resolve) {
+    require(['./demos/Uploader.vue'], resolve)
+  }
+},
+{
+  path: '/issue/833',
+  component: function (resolve) {
+    require(['./demos/Issue833.vue'], resolve)
+  }
+},
+{
+  path: '/issue/471',
+  component: function (resolve) {
+    require(['./demos/Issue471.vue'], resolve)
+  }
+},
+{
+  path: '/issue/598',
+  component: function (resolve) {
+    require(['./demos/Issue598.vue'], resolve)
+  }
+},
+{
+  path: '/issue/624',
+  component: function (resolve) {
+    require(['./demos/Issue624.vue'], resolve)
+  }
+},
+{
+  path: '/issue/649',
+  component: function (resolve) {
+    require(['./demos/Issue649.vue'], resolve)
+  }
+},
+{
+  path: '/issue/865',
+  component: function (resolve) {
+    require(['./demos/Issue865.vue'], resolve)
+  }
+},
+{
+  path: '/component/swipeout',
+  component: function (resolve) {
+    require(['./demos/Swipeout.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar-simple',
+  component: function (resolve) {
+    require(['./demos/TabbarSimple.vue'], resolve)
+  }
+},
+{
+  path: '/plugin/device',
+  component: function (resolve) {
+    require(['./demos/Device.vue'], resolve)
+  }
+},
+{
+  path: '/component/agree',
+  component: function (resolve) {
+    require(['./demos/Agree.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-hr',
+  component: function (resolve) {
+    require(['./demos/XHr.vue'], resolve)
+  }
+},
+{
+  path: '/component/marquee',
+  component: function (resolve) {
+    require(['./demos/Marquee.vue'], resolve)
+  }
+},
+{
+  path: '/component/msg',
+  component: function (resolve) {
+    require(['./demos/Msg.vue'], resolve)
+  }
+},
+{
+  path: '/component/wepay-input',
+  component: function (resolve) {
+    require(['./demos/WepayInput.vue'], resolve)
+  }
+},
+{
+  path: '/component/cell-box',
+  component: function (resolve) {
+    require(['./demos/CellBox.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-icon',
+  component: function (resolve) {
+    require(['./demos/XIcon.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-swiper',
+  component: function (resolve) {
+    require(['./demos/ScrollerSwiper.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar-icon',
+  component: function (resolve) {
+    require(['./demos/TabbarIcon.vue'], resolve)
+  }
+},
+{
+  path: '/component/datetime-range',
+  component: function (resolve) {
+    require(['./demos/DatetimeRange.vue'], resolve)
+  }
+},
+{
+  path: '/demo/x-img-scroller',
+  component: function (resolve) {
+    require(['./demos/XImgScroller.vue'], resolve)
+  }
+},
+{
+  path: '/component/cell-form-preview',
+  component: function (resolve) {
+    require(['./demos/CellFormPreview.vue'], resolve)
+  }
+},
+{
+  path: '/issue/1211',
+  component: function (resolve) {
+    require(['./demos/Issue1211.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-table',
+  component: function (resolve) {
+    require(['./demos/XTable.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup-radio',
+  component: function (resolve) {
+    require(['./demos/PopupRadio.vue'], resolve)
+  }
+},
+{
+  path: '/component/flow',
+  component: function (resolve) {
+    require(['./demos/Flow.vue'], resolve)
+  }
+},
+{
+  path: '/component/inline-loading',
+  component: function (resolve) {
+    require(['./demos/InlineLoading.vue'], resolve)
+  }
+},
+{
+  path: '/demo/inline-calendar-each-day-slot',
+  component: function (resolve) {
+    require(['./demos/InlineCalendarEachDaySlot.vue'], resolve)
+  }
+},
+{
+  path: '*',
+  component: function (resolve) {
+    require(['./demos/NotFoundComponent.vue'], resolve)
+  }
+}]
+
+const router = new VueRouter({
+  routes
+})
+
+sync(store, router)
+
+// simple history management
+const history = window.sessionStorage
+history.clear()
+let historyCount = history.getItem('count') * 1 || 0
+history.setItem('/', 0)
+
+router.beforeEach(function (to, from, next) {
+  store.commit('updateLoadingStatus', {isLoading: true})
+
+  const toIndex = history.getItem(to.path)
+  const fromIndex = history.getItem(from.path)
+
+  if (toIndex) {
+    if (!fromIndex || parseInt(toIndex, 10) > parseInt(fromIndex, 10) || (toIndex === '0' && fromIndex === '0')) {
+      store.commit('updateDirection', {direction: 'forward'})
+    } else {
+      store.commit('updateDirection', {direction: 'reverse'})
+    }
+  } else {
+    ++historyCount
+    history.setItem('count', historyCount)
+    to.path !== '/' && history.setItem(to.path, historyCount)
+    store.commit('updateDirection', {direction: 'forward'})
+  }
+
+  if (/\/http/.test(to.path)) {
+    let url = to.path.split('http')[1]
+    window.location.href = `http${url}`
+  } else {
+    next()
+  }
+})
+
+router.afterEach(function (to) {
+  store.commit('updateLoadingStatus', {isLoading: false})
+  if (process.env.NODE_ENV === 'production') {
+    ga && ga('set', 'page', to.fullPath)
+    ga && ga('send', 'pageview')
+  }
+})
+
+new Vue({
+  store,
+  router,
+  render: h => h(App)
+}).$mount('#app')
+/**
+ * External dependencies.
+ *
+ */
+
+var mouse = require('./lib/mouse')
+var events = require('./lib/events')
+var classes = require('./lib/classes')
+var percentage = require('./lib/percentage-calc')
+
+/**
+ * Expose `Powerange`.
+ */
+
+export default Powerange
+
+/**
+ * Create Powerange object.
+ *
+ * @constructor
+ * @param {Object} element
+ * @param {Object} options
+ * @api public
+ */
+
+function Powerange (element, options) {
+  if (!(this instanceof Powerange)) return new Powerange(element, options)
+
+  this.element = element
+  this.options = options || {}
+  this.slider = this.create('span', 'range-bar')
+  this.hasAppend = false
+
+  if (this.element !== null && this.element.type === 'text') this.init()
+}
+
+/**
+ * Bind events on handle element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.bindEvents = function () {
+  this.handle = this.slider.querySelector('.range-handle')
+  this.touch = events(this.handle, this)
+  this.touch.bind('touchstart', 'onmousedown')
+  this.touch.bind('touchmove', 'onmousemove')
+  this.touch.bind('touchend', 'onmouseup')
+  this.mouse = mouse(this.handle, this)
+  this.mouse.bind()
+}
+
+/**
+ * Hide the target element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.hide = function () {
+  this.element.style.display = 'none'
+}
+
+/**
+ * Append the target after the element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.append = function () {
+  if (!this.hasAppend) {
+    var slider = this.generate()
+    this.insertAfter(this.element, slider)
+  }
+  this.hasAppend = true
+}
+
+/**
+ * Generate the appropriate type of slider.
+ *
+ * @returns {Object} this.slider
+ * @api private
+ */
+
+Powerange.prototype.generate = function () {
+  var elems = {
+    'handle': {
+      'type': 'span',
+      'selector': 'range-handle'
+    },
+    'min': {
+      'type': 'span',
+      'selector': 'range-min'
+    },
+    'max': {
+      'type': 'span',
+      'selector': 'range-max'
+    },
+    'quantity': {
+      'type': 'span',
+      'selector': 'range-quantity'
+    }
+  }
+
+  for (var key in elems) {
+    if (elems.hasOwnProperty(key)) {
+      var temp = this.create(elems[key].type, elems[key].selector)
+      this.slider.appendChild(temp)
+    }
+  }
+
+  return this.slider
+}
+
+/**
+ * Create HTML element.
+ *
+ * @param {String} type
+ * @param {String} name
+ * @returns {Object} elem
+ * @api private
+ */
+
+Powerange.prototype.create = function (type, name) {
+  var elem = document.createElement(type)
+  elem.className = name
+
+  return elem
+}
+
+/**
+ * Insert element after another element.
+ *
+ * @param {Object} reference
+ * @param {Object} target
+ * @api private
+ */
+
+Powerange.prototype.insertAfter = function (reference, target) {
+  reference.parentNode.insertBefore(target, reference.nextSibling)
+}
+
+/**
+ * Set min and max values.
+ *
+ * @param {Number} min
+ * @param {Number} max
+ * @api private
+ */
+
+Powerange.prototype.setRange = function (min, max) {
+  if (typeof min === 'number' && typeof max === 'number' && !this.options.hideRange) {
+    this.slider.querySelector('.range-min').innerHTML = this.options.minHTML || min
+    this.slider.querySelector('.range-max').innerHTML = this.options.maxHTML || max
+  }
+}
+
+/**
+ * Set slider current value.
+ *
+ * @param {Number} offset
+ * @param {Number} size
+ * @api private
+ */
+
+Powerange.prototype.setValue = function (offset, size) {
+  var part = percentage.from(parseFloat(offset), size)
+  if (offset === '0px' || size === 0) {
+    value = this.options.min
+  } else {
+    var value = percentage.of(part, this.options.max - this.options.min) + this.options.min
+    value = (this.options.decimal) ? (Math.round(value * 100) / 100) : Math.round(value)
+
+    if (value > this.options.max) {
+      value = this.options.max
+    }
+  }
+
+  var changed = false
+
+  changed = this.element.value !== value
+
+  this.element.value = value
+  this.options.callback(value)
+  if (changed) this.changeEvent()
+}
+
+/**
+ * Set step.
+ *
+ * @param {Number} sliderSize
+ * @param {Number} handleSize
+ * @returns {Array} this.steps
+ * @api private
+ */
+
+Powerange.prototype.step = function (sliderSize, handleSize) {
+  var dimension = sliderSize - handleSize
+  var part = percentage.from(this.checkStep(this.options.step), this.options.max - this.options.min)
+  var interval = percentage.of(part, dimension)
+  var steps = []
+
+  for (let i = 0; i <= dimension; i += interval) {
+    steps.push(i)
+  }
+
+  this.steps = steps
+  for (let i = 10; i >= 0; i--) {
+    this.steps[steps.length - i] = dimension - interval * i
+  }
+
+  return this.steps
+}
+
+/**
+ * Check values.
+ *
+ * @param {Number} start
+ * @api private
+ */
+
+Powerange.prototype.checkValues = function (start) {
+  if (start < this.options.min) this.options.start = this.options.min
+  if (start > this.options.max) this.options.start = this.options.max
+  if (this.options.min >= this.options.max) this.options.min = this.options.max
+}
+
+/**
+ * Make sure `step` is positive.
+ *
+ * @param {Number} value
+ * @returns {Number} this.options.step
+ * @api private
+ */
+
+Powerange.prototype.checkStep = function (value) {
+  if (value < 0) value = Math.abs(value)
+  this.options.step = value
+  return this.options.step
+}
+
+/**
+ * Disable range slider.
+ *
+ * @api private
+ */
+
+Powerange.prototype.disable = function (force) {
+  if (this.options.disable || force) {
+    this.mouse.unbind()
+    this.touch.unbind()
+  }
+  if (this.options.disable) {
+    if (this.options.disableOpacity) {
+      this.slider.style.opacity = this.options.disableOpacity
+    }
+    classes(this.slider).add('range-bar-disabled')
+  }
+}
+
+/**
+ * Make element unselectable.
+ *
+ * @param {Object} element
+ * @param {Boolean} set
+ * @api private
+ */
+
+Powerange.prototype.unselectable = function (element, set) {
+  if (!classes(this.slider).has('unselectable') && set === true) {
+    classes(this.slider).add('unselectable')
+  } else {
+    classes(this.slider).remove('unselectable')
+  }
+}
+
+/**
+ * Handle the onchange event.
+ *
+ * @param {Boolean} state
+ * @api private
+ */
+
+Powerange.prototype.changeEvent = function (state) {
+  if (typeof Event === 'function' || !document.fireEvent) {
+    var event = document.createEvent('HTMLEvents')
+    event.initEvent('change', false, true)
+    this.element.dispatchEvent(event)
+  } else {
+    this.element.fireEvent('onchange')
+  }
+}
+
+/**
+ * Initialize main class.
+ *
+ * @api private
+ */
+
+Powerange.prototype.init = function () {
+  this.hide()
+  this.append()
+  this.bindEvents()
+  this.checkValues(this.options.start)
+  this.setRange(this.options.min, this.options.max)
+  this.disable()
+}
+
+Powerange.prototype.reInit = function (opts) {
+  this.options.start = opts.value
+  this.options.min = opts.min
+  this.options.max = opts.max
+  this.options.step = opts.step
+  this.disable(true)
+  this.init()
+}
+
+import Vue from 'vue'
+import VueRouter from 'vue-router'
+import { sync } from 'vuex-router-sync'
+
+Vue.use(VueRouter)
+import App from './App'
+import Vuex from 'vuex'
+Vue.use(Vuex)
+//import router from './router'
+import vuexI18n from 'vuex-i18n'
+
+require('es6-promise').polyfill()
+
+/**
+ * you can add your module here
+ */
+let store = new Vuex.Store({
+  modules: {
+    i18n: vuexI18n.store
+  }
+})
+
+store.registerModule('vux', {
+  state: {
+    demoScrollTop: 0,
+    isLoading: false,
+    direction: 'forward'
+  },
+  mutations: {
+    updateDemoPosition (state, payload) {
+      state.demoScrollTop = payload.top
+    },
+    updateLoadingStatus (state, payload) {
+      state.isLoading = payload.isLoading
+    },
+    updateDirection (state, payload) {
+      state.direction = payload.direction
+    }
+  },
+  actions: {
+    updateDemoPosition ({commit}, top) {
+      commit({type: 'updateDemoPosition', top: top})
+    }
+  }
+})
+
+Vue.use(vuexI18n.plugin, store)
+
+// plugins
+import LocalePlugin from './plugins/locale/index.js'
+import DevicePlugin from './plugins/device/index.js'
+import ToastPlugin from './plugins/toast/index.js'
+import AlertPlugin from './plugins/alert/index.js'
+import ConfirmPlugin from './plugins/confirm/index.js'
+import LoadingPlugin from './plugins/loading/index.js'
+import WechatPlugin from './plugins/wechat/index.js'
+import AjaxPlugin from './plugins/ajax/index.js'
+import AppPlugin from './plugins/app/index.js'
+
+Vue.use(DevicePlugin)
+Vue.use(ToastPlugin)
+Vue.use(AlertPlugin)
+Vue.use(ConfirmPlugin)
+Vue.use(LoadingPlugin)
+Vue.use(WechatPlugin)
+Vue.use(AjaxPlugin)
+Vue.use(LocalePlugin)
+
+// test
+if (process.env.platform === 'app') {
+  Vue.use(AppPlugin, store)
+}
+
+const wx = Vue.wechat
+const http = Vue.http
+
+/**
+ * -------------------------- 微信分享 ----------------------
+ * 请不要直接复制下面代码
+ */
+
+if (process.env.NODE_ENV === 'production') {
+  wx.ready(() => {
+    console.log('wechat ready')
+    wx.onMenuShareAppMessage({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_message',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+
+    wx.onMenuShareTimeline({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_timeline',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+  })
+
+  const permissions = JSON.stringify(['onMenuShareTimeline', 'onMenuShareAppMessage'])
+  const url = document.location.href
+  http.post('https://vux.li/jssdk?url=' + encodeURIComponent(url.split('#')[0]) + '&jsApiList=' + permissions).then(res => {
+    wx.config(res.data.data)
+  })
+}
+
+import objectAssign from 'object-assign'
+
+const vuxLocales = require('json-loader!yaml-loader!./locales/all.yml')
+//const componentsLocales = require('json-loader!yaml-loader!src/locales/components.yml')
+/*
+const globalLocales = require('json-loader!yaml-loader!src/locales/global_locales.yml') || {en: {}, 'zh-CN': {}}
+*/
+
+/*const finalLocales = {
+  'en': objectAssign(vuxLocales['en'], componentsLocales['en'], globalLocales['en']),
+  'zh-CN': objectAssign(vuxLocales['zh-CN'], componentsLocales['zh-CN'], globalLocales['zh-CN'])
+}*/
+
+/*for (let i in finalLocales) {
+  Vue.i18n.add(i, finalLocales[i])
+}*/
+
+const nowLocale = Vue.locale.get()
+if (/zh/.test(nowLocale)) {
+  Vue.i18n.set('zh-CN')
+} else {
+  Vue.i18n.set('en')
+}
+
+const FastClick = require('fastclick')
+FastClick.attach(document.body)
+
+import demo from '@/demos/Demo'
+// The following line will be replaced with by vux-loader with routes in ./demo_list.json
+const routes = [{
+  path: '/component/cell',
+  component: function (resolve) {
+    require(['./demos/Cell.vue'], resolve)
+  }
+},
+{
+  path: '/css/1px',
+  component: function (resolve) {
+    require(['./demos/OnePx.vue'], resolve)
+  }
+},
+{
+  path: '/component/actionsheet',
+  component: function (resolve) {
+    require(['./demos/Actionsheet.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-switch',
+  component: function (resolve) {
+    require(['./demos/XSwitch.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-address',
+  component: function (resolve) {
+    require(['./demos/XAddress.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup',
+  component: function (resolve) {
+    require(['./demos/Popup.vue'], resolve)
+  }
+},
+{
+  path: '/component/picker',
+  component: function (resolve) {
+    require(['./demos/Picker.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup-picker',
+  component: function (resolve) {
+    require(['./demos/PopupPicker.vue'], resolve)
+  }
+},
+{
+  path: '/component/alert',
+  component: function (resolve) {
+    require(['./demos/Alert.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-dialog',
+  component: function (resolve) {
+    require(['./demos/XDialog.vue'], resolve)
+  }
+},
+{
+  path: '/component/badge',
+  component: function (resolve) {
+    require(['./demos/Badge.vue'], resolve)
+  }
+},
+{
+  path: '/component/button-tab',
+  component: function (resolve) {
+    require(['./demos/ButtonTab.vue'], resolve)
+  }
+},
+{
+  path: '/component/checker',
+  component: function (resolve) {
+    require(['./demos/Checker.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-circle',
+  component: function (resolve) {
+    require(['./demos/XCircle.vue'], resolve)
+  }
+},
+{
+  path: '/component/radio',
+  component: function (resolve) {
+    require(['./demos/Radio.vue'], resolve)
+  }
+},
+{
+  path: '/component/demo',
+  component: function (resolve) {
+    require(['./demos/Demo.vue'], resolve)
+  }
+},
+{
+  path: '/component/confirm',
+  component: function (resolve) {
+    require(['./demos/Confirm.vue'], resolve)
+  }
+},
+{
+  path: '/component/blur',
+  component: function (resolve) {
+    require(['./demos/Blur.vue'], resolve)
+  }
+},
+{
+  path: '/component/calendar',
+  component: function (resolve) {
+    require(['./demos/Calendar.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-number',
+  component: function (resolve) {
+    require(['./demos/XNumber.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar',
+  component: function (resolve) {
+    require(['./demos/Tabbar.vue'], resolve)
+  }
+},
+{
+  path: '/component/tab',
+  component: function (resolve) {
+    require(['./demos/Tab.vue'], resolve)
+  }
+},
+{
+  path: '/component/swiper',
+  component: function (resolve) {
+    require(['./demos/Swiper.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller',
+  component: function (resolve) {
+    require(['./demos/Scroller.vue'], resolve)
+  }
+},
+{
+  path: '/component/pulldown',
+  component: function (resolve) {
+    require(['./demos/Pulldown.vue'], resolve)
+  }
+},
+{
+  path: '/component/pullup',
+  component: function (resolve) {
+    require(['./demos/Pullup.vue'], resolve)
+  }
+},
+{
+  path: '/component/pulldown-pullup',
+  component: function (resolve) {
+    require(['./demos/PulldownPullup.vue'], resolve)
+  }
+},
+{
+  path: '/component/toast',
+  component: function (resolve) {
+    require(['./demos/Toast.vue'], resolve)
+  }
+},
+{
+  path: '/component/reddot',
+  component: function (resolve) {
+    require(['./demos/Reddot.vue'], resolve)
+  }
+},
+{
+  path: '/component/divider',
+  component: function (resolve) {
+    require(['./demos/Divider.vue'], resolve)
+  }
+},
+{
+  path: '/component/checklist',
+  component: function (resolve) {
+    require(['./demos/Checklist.vue'], resolve)
+  }
+},
+{
+  path: '/component/issue702',
+  component: function (resolve) {
+    require(['./demos/Issue702.vue'], resolve)
+  }
+},
+{
+  path: '/component/selector',
+  component: function (resolve) {
+    require(['./demos/Selector.vue'], resolve)
+  }
+},
+{
+  path: '/component/panel',
+  component: function (resolve) {
+    require(['./demos/Panel.vue'], resolve)
+  }
+},
+{
+  path: '/component/inline-calendar',
+  component: function (resolve) {
+    require(['./demos/InlineCalendar.vue'], resolve)
+  }
+},
+{
+  path: '/component/datetime',
+  component: function (resolve) {
+    require(['./demos/Datetime.vue'], resolve)
+  }
+},
+{
+  path: '/component/range',
+  component: function (resolve) {
+    require(['./demos/Range.vue'], resolve)
+  }
+},
+{
+  path: '/component/rater',
+  component: function (resolve) {
+    require(['./demos/Rater.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-button',
+  component: function (resolve) {
+    require(['./demos/XButton.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-input',
+  component: function (resolve) {
+    require(['./demos/XInput.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-textarea',
+  component: function (resolve) {
+    require(['./demos/XTextarea.vue'], resolve)
+  }
+},
+{
+  path: '/component/loading',
+  component: function (resolve) {
+    require(['./demos/Loading.vue'], resolve)
+  }
+},
+{
+  path: '/component/popover',
+  component: function (resolve) {
+    require(['./demos/Popover.vue'], resolve)
+  }
+},
+{
+  path: '/component/countup',
+  component: function (resolve) {
+    require(['./demos/Countup.vue'], resolve)
+  }
+},
+{
+  path: '/component/countdown',
+  component: function (resolve) {
+    require(['./demos/Countdown.vue'], resolve)
+  }
+},
+{
+  path: '/component/clocker',
+  component: function (resolve) {
+    require(['./demos/Clocker.vue'], resolve)
+  }
+},
+{
+  path: '/component/flexbox',
+  component: function (resolve) {
+    require(['./demos/Flexbox.vue'], resolve)
+  }
+},
+{
+  path: '/component/icon',
+  component: function (resolve) {
+    require(['./demos/Icon.vue'], resolve)
+  }
+},
+{
+  path: '/component/card',
+  component: function (resolve) {
+    require(['./demos/Card.vue'], resolve)
+  }
+},
+{
+  path: '/component/previewer',
+  component: function (resolve) {
+    require(['./demos/Previewer.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-progress',
+  component: function (resolve) {
+    require(['./demos/XProgress.vue'], resolve)
+  }
+},
+{
+  path: '/component/sticky',
+  component: function (resolve) {
+    require(['./demos/Sticky.vue'], resolve)
+  }
+},
+{
+  path: '/component/search',
+  component: function (resolve) {
+    require(['./demos/Search.vue'], resolve)
+  }
+},
+{
+  path: '/component/search-static',
+  component: function (resolve) {
+    require(['./demos/SearchStatic.vue'], resolve)
+  }
+},
+{
+  path: '/component/spinner',
+  component: function (resolve) {
+    require(['./demos/Spinner.vue'], resolve)
+  }
+},
+{
+  path: '/component/timeline',
+  component: function (resolve) {
+    require(['./demos/Timeline.vue'], resolve)
+  }
+},
+{
+  path: '/component/step',
+  component: function (resolve) {
+    require(['./demos/Step.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-header',
+  component: function (resolve) {
+    require(['./demos/XHeader.vue'], resolve)
+  }
+},
+{
+  path: '/component/qrcode',
+  component: function (resolve) {
+    require(['./demos/Qrcode.vue'], resolve)
+  }
+},
+{
+  path: '/component/masker',
+  component: function (resolve) {
+    require(['./demos/Masker.vue'], resolve)
+  }
+},
+{
+  path: '/component/close',
+  component: function (resolve) {
+    require(['./demos/Close.vue'], resolve)
+  }
+},
+{
+  path: '/component/center',
+  component: function (resolve) {
+    require(['./demos/Center.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-img',
+  component: function (resolve) {
+    require(['./demos/XImg.vue'], resolve)
+  }
+},
+{
+  path: '/component/wechat-emotion',
+  component: function (resolve) {
+    require(['./demos/WechatEmotion.vue'], resolve)
+  }
+},
+{
+  path: '/component/color-picker',
+  component: function (resolve) {
+    require(['./demos/ColorPicker.vue'], resolve)
+  }
+},
+{
+  path: '/component/form-preview',
+  component: function (resolve) {
+    require(['./demos/FormPreview.vue'], resolve)
+  }
+},
+{
+  path: '/component/load-more',
+  component: function (resolve) {
+    require(['./demos/LoadMore.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-full',
+  component: function (resolve) {
+    require(['./demos/ScrollerFull.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-header',
+  component: function (resolve) {
+    require(['./demos/ScrollerHeader.vue'], resolve)
+  }
+},
+{
+  path: '/component/grid',
+  component: function (resolve) {
+    require(['./demos/Grid.vue'], resolve)
+  }
+},
+{
+  path: '/component/group',
+  component: function (resolve) {
+    require(['./demos/Group.vue'], resolve)
+  }
+},
+{
+  path: '/component/view-box',
+  component: function (resolve) {
+    require(['./demos/ViewBox.vue'], resolve)
+  }
+},
+{
+  path: '/',
+  component: function (resolve) {
+    require(['./demos/Home.vue'], resolve)
+  }
+},
+{
+  path: '/project/donate',
+  component: function (resolve) {
+    require(['./demos/Donate.vue'], resolve)
+  }
+},
+{
+  path: '/demo',
+  component: function (resolve) {
+    require(['./demos/Demo.vue'], resolve)
+  }
+},
+{
+  path: '/component/format-time',
+  component: function (resolve) {
+    require(['./demos/FormatTime.vue'], resolve)
+  }
+},
+{
+  path: '/component/uploader',
+  component: function (resolve) {
+    require(['./demos/Uploader.vue'], resolve)
+  }
+},
+{
+  path: '/issue/833',
+  component: function (resolve) {
+    require(['./demos/Issue833.vue'], resolve)
+  }
+},
+{
+  path: '/issue/471',
+  component: function (resolve) {
+    require(['./demos/Issue471.vue'], resolve)
+  }
+},
+{
+  path: '/issue/598',
+  component: function (resolve) {
+    require(['./demos/Issue598.vue'], resolve)
+  }
+},
+{
+  path: '/issue/624',
+  component: function (resolve) {
+    require(['./demos/Issue624.vue'], resolve)
+  }
+},
+{
+  path: '/issue/649',
+  component: function (resolve) {
+    require(['./demos/Issue649.vue'], resolve)
+  }
+},
+{
+  path: '/issue/865',
+  component: function (resolve) {
+    require(['./demos/Issue865.vue'], resolve)
+  }
+},
+{
+  path: '/component/swipeout',
+  component: function (resolve) {
+    require(['./demos/Swipeout.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar-simple',
+  component: function (resolve) {
+    require(['./demos/TabbarSimple.vue'], resolve)
+  }
+},
+{
+  path: '/plugin/device',
+  component: function (resolve) {
+    require(['./demos/Device.vue'], resolve)
+  }
+},
+{
+  path: '/component/agree',
+  component: function (resolve) {
+    require(['./demos/Agree.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-hr',
+  component: function (resolve) {
+    require(['./demos/XHr.vue'], resolve)
+  }
+},
+{
+  path: '/component/marquee',
+  component: function (resolve) {
+    require(['./demos/Marquee.vue'], resolve)
+  }
+},
+{
+  path: '/component/msg',
+  component: function (resolve) {
+    require(['./demos/Msg.vue'], resolve)
+  }
+},
+{
+  path: '/component/wepay-input',
+  component: function (resolve) {
+    require(['./demos/WepayInput.vue'], resolve)
+  }
+},
+{
+  path: '/component/cell-box',
+  component: function (resolve) {
+    require(['./demos/CellBox.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-icon',
+  component: function (resolve) {
+    require(['./demos/XIcon.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-swiper',
+  component: function (resolve) {
+    require(['./demos/ScrollerSwiper.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar-icon',
+  component: function (resolve) {
+    require(['./demos/TabbarIcon.vue'], resolve)
+  }
+},
+{
+  path: '/component/datetime-range',
+  component: function (resolve) {
+    require(['./demos/DatetimeRange.vue'], resolve)
+  }
+},
+{
+  path: '/demo/x-img-scroller',
+  component: function (resolve) {
+    require(['./demos/XImgScroller.vue'], resolve)
+  }
+},
+{
+  path: '/component/cell-form-preview',
+  component: function (resolve) {
+    require(['./demos/CellFormPreview.vue'], resolve)
+  }
+},
+{
+  path: '/issue/1211',
+  component: function (resolve) {
+    require(['./demos/Issue1211.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-table',
+  component: function (resolve) {
+    require(['./demos/XTable.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup-radio',
+  component: function (resolve) {
+    require(['./demos/PopupRadio.vue'], resolve)
+  }
+},
+{
+  path: '/component/flow',
+  component: function (resolve) {
+    require(['./demos/Flow.vue'], resolve)
+  }
+},
+{
+  path: '/component/inline-loading',
+  component: function (resolve) {
+    require(['./demos/InlineLoading.vue'], resolve)
+  }
+},
+{
+  path: '/demo/inline-calendar-each-day-slot',
+  component: function (resolve) {
+    require(['./demos/InlineCalendarEachDaySlot.vue'], resolve)
+  }
+},
+{
+  path: '*',
+  component: function (resolve) {
+    require(['./demos/NotFoundComponent.vue'], resolve)
+  }
+}]
+
+const router = new VueRouter({
+  routes
+})
+
+sync(store, router)
+
+// simple history management
+const history = window.sessionStorage
+history.clear()
+let historyCount = history.getItem('count') * 1 || 0
+history.setItem('/', 0)
+
+router.beforeEach(function (to, from, next) {
+  store.commit('updateLoadingStatus', {isLoading: true})
+
+  const toIndex = history.getItem(to.path)
+  const fromIndex = history.getItem(from.path)
+
+  if (toIndex) {
+    if (!fromIndex || parseInt(toIndex, 10) > parseInt(fromIndex, 10) || (toIndex === '0' && fromIndex === '0')) {
+      store.commit('updateDirection', {direction: 'forward'})
+    } else {
+      store.commit('updateDirection', {direction: 'reverse'})
+    }
+  } else {
+    ++historyCount
+    history.setItem('count', historyCount)
+    to.path !== '/' && history.setItem(to.path, historyCount)
+    store.commit('updateDirection', {direction: 'forward'})
+  }
+
+  if (/\/http/.test(to.path)) {
+    let url = to.path.split('http')[1]
+    window.location.href = `http${url}`
+  } else {
+    next()
+  }
+})
+
+router.afterEach(function (to) {
+  store.commit('updateLoadingStatus', {isLoading: false})
+  if (process.env.NODE_ENV === 'production') {
+    ga && ga('set', 'page', to.fullPath)
+    ga && ga('send', 'pageview')
+  }
+})
+
+new Vue({
+  store,
+  router,
+  render: h => h(App)
+}).$mount('#app')
+/**
+ * External dependencies.
+ *
+ */
+
+var mouse = require('./lib/mouse')
+var events = require('./lib/events')
+var classes = require('./lib/classes')
+var percentage = require('./lib/percentage-calc')
+
+/**
+ * Expose `Powerange`.
+ */
+
+export default Powerange
+
+/**
+ * Create Powerange object.
+ *
+ * @constructor
+ * @param {Object} element
+ * @param {Object} options
+ * @api public
+ */
+
+function Powerange (element, options) {
+  if (!(this instanceof Powerange)) return new Powerange(element, options)
+
+  this.element = element
+  this.options = options || {}
+  this.slider = this.create('span', 'range-bar')
+  this.hasAppend = false
+
+  if (this.element !== null && this.element.type === 'text') this.init()
+}
+
+/**
+ * Bind events on handle element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.bindEvents = function () {
+  this.handle = this.slider.querySelector('.range-handle')
+  this.touch = events(this.handle, this)
+  this.touch.bind('touchstart', 'onmousedown')
+  this.touch.bind('touchmove', 'onmousemove')
+  this.touch.bind('touchend', 'onmouseup')
+  this.mouse = mouse(this.handle, this)
+  this.mouse.bind()
+}
+
+/**
+ * Hide the target element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.hide = function () {
+  this.element.style.display = 'none'
+}
+
+/**
+ * Append the target after the element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.append = function () {
+  if (!this.hasAppend) {
+    var slider = this.generate()
+    this.insertAfter(this.element, slider)
+  }
+  this.hasAppend = true
+}
+
+/**
+ * Generate the appropriate type of slider.
+ *
+ * @returns {Object} this.slider
+ * @api private
+ */
+
+Powerange.prototype.generate = function () {
+  var elems = {
+    'handle': {
+      'type': 'span',
+      'selector': 'range-handle'
+    },
+    'min': {
+      'type': 'span',
+      'selector': 'range-min'
+    },
+    'max': {
+      'type': 'span',
+      'selector': 'range-max'
+    },
+    'quantity': {
+      'type': 'span',
+      'selector': 'range-quantity'
+    }
+  }
+
+  for (var key in elems) {
+    if (elems.hasOwnProperty(key)) {
+      var temp = this.create(elems[key].type, elems[key].selector)
+      this.slider.appendChild(temp)
+    }
+  }
+
+  return this.slider
+}
+
+/**
+ * Create HTML element.
+ *
+ * @param {String} type
+ * @param {String} name
+ * @returns {Object} elem
+ * @api private
+ */
+
+Powerange.prototype.create = function (type, name) {
+  var elem = document.createElement(type)
+  elem.className = name
+
+  return elem
+}
+
+/**
+ * Insert element after another element.
+ *
+ * @param {Object} reference
+ * @param {Object} target
+ * @api private
+ */
+
+Powerange.prototype.insertAfter = function (reference, target) {
+  reference.parentNode.insertBefore(target, reference.nextSibling)
+}
+
+/**
+ * Set min and max values.
+ *
+ * @param {Number} min
+ * @param {Number} max
+ * @api private
+ */
+
+Powerange.prototype.setRange = function (min, max) {
+  if (typeof min === 'number' && typeof max === 'number' && !this.options.hideRange) {
+    this.slider.querySelector('.range-min').innerHTML = this.options.minHTML || min
+    this.slider.querySelector('.range-max').innerHTML = this.options.maxHTML || max
+  }
+}
+
+/**
+ * Set slider current value.
+ *
+ * @param {Number} offset
+ * @param {Number} size
+ * @api private
+ */
+
+Powerange.prototype.setValue = function (offset, size) {
+  var part = percentage.from(parseFloat(offset), size)
+  if (offset === '0px' || size === 0) {
+    value = this.options.min
+  } else {
+    var value = percentage.of(part, this.options.max - this.options.min) + this.options.min
+    value = (this.options.decimal) ? (Math.round(value * 100) / 100) : Math.round(value)
+
+    if (value > this.options.max) {
+      value = this.options.max
+    }
+  }
+
+  var changed = false
+
+  changed = this.element.value !== value
+
+  this.element.value = value
+  this.options.callback(value)
+  if (changed) this.changeEvent()
+}
+
+/**
+ * Set step.
+ *
+ * @param {Number} sliderSize
+ * @param {Number} handleSize
+ * @returns {Array} this.steps
+ * @api private
+ */
+
+Powerange.prototype.step = function (sliderSize, handleSize) {
+  var dimension = sliderSize - handleSize
+  var part = percentage.from(this.checkStep(this.options.step), this.options.max - this.options.min)
+  var interval = percentage.of(part, dimension)
+  var steps = []
+
+  for (let i = 0; i <= dimension; i += interval) {
+    steps.push(i)
+  }
+
+  this.steps = steps
+  for (let i = 10; i >= 0; i--) {
+    this.steps[steps.length - i] = dimension - interval * i
+  }
+
+  return this.steps
+}
+
+/**
+ * Check values.
+ *
+ * @param {Number} start
+ * @api private
+ */
+
+Powerange.prototype.checkValues = function (start) {
+  if (start < this.options.min) this.options.start = this.options.min
+  if (start > this.options.max) this.options.start = this.options.max
+  if (this.options.min >= this.options.max) this.options.min = this.options.max
+}
+
+/**
+ * Make sure `step` is positive.
+ *
+ * @param {Number} value
+ * @returns {Number} this.options.step
+ * @api private
+ */
+
+Powerange.prototype.checkStep = function (value) {
+  if (value < 0) value = Math.abs(value)
+  this.options.step = value
+  return this.options.step
+}
+
+/**
+ * Disable range slider.
+ *
+ * @api private
+ */
+
+Powerange.prototype.disable = function (force) {
+  if (this.options.disable || force) {
+    this.mouse.unbind()
+    this.touch.unbind()
+  }
+  if (this.options.disable) {
+    if (this.options.disableOpacity) {
+      this.slider.style.opacity = this.options.disableOpacity
+    }
+    classes(this.slider).add('range-bar-disabled')
+  }
+}
+
+/**
+ * Make element unselectable.
+ *
+ * @param {Object} element
+ * @param {Boolean} set
+ * @api private
+ */
+
+Powerange.prototype.unselectable = function (element, set) {
+  if (!classes(this.slider).has('unselectable') && set === true) {
+    classes(this.slider).add('unselectable')
+  } else {
+    classes(this.slider).remove('unselectable')
+  }
+}
+
+/**
+ * Handle the onchange event.
+ *
+ * @param {Boolean} state
+ * @api private
+ */
+
+Powerange.prototype.changeEvent = function (state) {
+  if (typeof Event === 'function' || !document.fireEvent) {
+    var event = document.createEvent('HTMLEvents')
+    event.initEvent('change', false, true)
+    this.element.dispatchEvent(event)
+  } else {
+    this.element.fireEvent('onchange')
+  }
+}
+
+/**
+ * Initialize main class.
+ *
+ * @api private
+ */
+
+Powerange.prototype.init = function () {
+  this.hide()
+  this.append()
+  this.bindEvents()
+  this.checkValues(this.options.start)
+  this.setRange(this.options.min, this.options.max)
+  this.disable()
+}
+
+Powerange.prototype.reInit = function (opts) {
+  this.options.start = opts.value
+  this.options.min = opts.min
+  this.options.max = opts.max
+  this.options.step = opts.step
+  this.disable(true)
+  this.init()
+}
+
+import Vue from 'vue'
+import VueRouter from 'vue-router'
+import { sync } from 'vuex-router-sync'
+
+Vue.use(VueRouter)
+import App from './App'
+import Vuex from 'vuex'
+Vue.use(Vuex)
+//import router from './router'
+import vuexI18n from 'vuex-i18n'
+
+require('es6-promise').polyfill()
+
+/**
+ * you can add your module here
+ */
+let store = new Vuex.Store({
+  modules: {
+    i18n: vuexI18n.store
+  }
+})
+
+store.registerModule('vux', {
+  state: {
+    demoScrollTop: 0,
+    isLoading: false,
+    direction: 'forward'
+  },
+  mutations: {
+    updateDemoPosition (state, payload) {
+      state.demoScrollTop = payload.top
+    },
+    updateLoadingStatus (state, payload) {
+      state.isLoading = payload.isLoading
+    },
+    updateDirection (state, payload) {
+      state.direction = payload.direction
+    }
+  },
+  actions: {
+    updateDemoPosition ({commit}, top) {
+      commit({type: 'updateDemoPosition', top: top})
+    }
+  }
+})
+
+Vue.use(vuexI18n.plugin, store)
+
+// plugins
+import LocalePlugin from './plugins/locale/index.js'
+import DevicePlugin from './plugins/device/index.js'
+import ToastPlugin from './plugins/toast/index.js'
+import AlertPlugin from './plugins/alert/index.js'
+import ConfirmPlugin from './plugins/confirm/index.js'
+import LoadingPlugin from './plugins/loading/index.js'
+import WechatPlugin from './plugins/wechat/index.js'
+import AjaxPlugin from './plugins/ajax/index.js'
+import AppPlugin from './plugins/app/index.js'
+
+Vue.use(DevicePlugin)
+Vue.use(ToastPlugin)
+Vue.use(AlertPlugin)
+Vue.use(ConfirmPlugin)
+Vue.use(LoadingPlugin)
+Vue.use(WechatPlugin)
+Vue.use(AjaxPlugin)
+Vue.use(LocalePlugin)
+
+// test
+if (process.env.platform === 'app') {
+  Vue.use(AppPlugin, store)
+}
+
+const wx = Vue.wechat
+const http = Vue.http
+
+/**
+ * -------------------------- 微信分享 ----------------------
+ * 请不要直接复制下面代码
+ */
+
+if (process.env.NODE_ENV === 'production') {
+  wx.ready(() => {
+    console.log('wechat ready')
+    wx.onMenuShareAppMessage({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_message',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+
+    wx.onMenuShareTimeline({
+      title: 'VUX', // 分享标题
+      desc: '基于 WeUI 和 Vue 的移动端 UI 组件库',
+      link: 'https://vux.li?x-page=wechat_share_timeline',
+      imgUrl: 'https://static.vux.li/logo_520.png'
+    })
+  })
+
+  const permissions = JSON.stringify(['onMenuShareTimeline', 'onMenuShareAppMessage'])
+  const url = document.location.href
+  http.post('https://vux.li/jssdk?url=' + encodeURIComponent(url.split('#')[0]) + '&jsApiList=' + permissions).then(res => {
+    wx.config(res.data.data)
+  })
+}
+
+import objectAssign from 'object-assign'
+
+const vuxLocales = require('json-loader!yaml-loader!./locales/all.yml')
+//const componentsLocales = require('json-loader!yaml-loader!src/locales/components.yml')
+/*
+const globalLocales = require('json-loader!yaml-loader!src/locales/global_locales.yml') || {en: {}, 'zh-CN': {}}
+*/
+
+/*const finalLocales = {
+  'en': objectAssign(vuxLocales['en'], componentsLocales['en'], globalLocales['en']),
+  'zh-CN': objectAssign(vuxLocales['zh-CN'], componentsLocales['zh-CN'], globalLocales['zh-CN'])
+}*/
+
+/*for (let i in finalLocales) {
+  Vue.i18n.add(i, finalLocales[i])
+}*/
+
+const nowLocale = Vue.locale.get()
+if (/zh/.test(nowLocale)) {
+  Vue.i18n.set('zh-CN')
+} else {
+  Vue.i18n.set('en')
+}
+
+const FastClick = require('fastclick')
+FastClick.attach(document.body)
+
+import demo from '@/demos/Demo'
+// The following line will be replaced with by vux-loader with routes in ./demo_list.json
+const routes = [{
+  path: '/component/cell',
+  component: function (resolve) {
+    require(['./demos/Cell.vue'], resolve)
+  }
+},
+{
+  path: '/css/1px',
+  component: function (resolve) {
+    require(['./demos/OnePx.vue'], resolve)
+  }
+},
+{
+  path: '/component/actionsheet',
+  component: function (resolve) {
+    require(['./demos/Actionsheet.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-switch',
+  component: function (resolve) {
+    require(['./demos/XSwitch.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-address',
+  component: function (resolve) {
+    require(['./demos/XAddress.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup',
+  component: function (resolve) {
+    require(['./demos/Popup.vue'], resolve)
+  }
+},
+{
+  path: '/component/picker',
+  component: function (resolve) {
+    require(['./demos/Picker.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup-picker',
+  component: function (resolve) {
+    require(['./demos/PopupPicker.vue'], resolve)
+  }
+},
+{
+  path: '/component/alert',
+  component: function (resolve) {
+    require(['./demos/Alert.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-dialog',
+  component: function (resolve) {
+    require(['./demos/XDialog.vue'], resolve)
+  }
+},
+{
+  path: '/component/badge',
+  component: function (resolve) {
+    require(['./demos/Badge.vue'], resolve)
+  }
+},
+{
+  path: '/component/button-tab',
+  component: function (resolve) {
+    require(['./demos/ButtonTab.vue'], resolve)
+  }
+},
+{
+  path: '/component/checker',
+  component: function (resolve) {
+    require(['./demos/Checker.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-circle',
+  component: function (resolve) {
+    require(['./demos/XCircle.vue'], resolve)
+  }
+},
+{
+  path: '/component/radio',
+  component: function (resolve) {
+    require(['./demos/Radio.vue'], resolve)
+  }
+},
+{
+  path: '/component/demo',
+  component: function (resolve) {
+    require(['./demos/Demo.vue'], resolve)
+  }
+},
+{
+  path: '/component/confirm',
+  component: function (resolve) {
+    require(['./demos/Confirm.vue'], resolve)
+  }
+},
+{
+  path: '/component/blur',
+  component: function (resolve) {
+    require(['./demos/Blur.vue'], resolve)
+  }
+},
+{
+  path: '/component/calendar',
+  component: function (resolve) {
+    require(['./demos/Calendar.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-number',
+  component: function (resolve) {
+    require(['./demos/XNumber.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar',
+  component: function (resolve) {
+    require(['./demos/Tabbar.vue'], resolve)
+  }
+},
+{
+  path: '/component/tab',
+  component: function (resolve) {
+    require(['./demos/Tab.vue'], resolve)
+  }
+},
+{
+  path: '/component/swiper',
+  component: function (resolve) {
+    require(['./demos/Swiper.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller',
+  component: function (resolve) {
+    require(['./demos/Scroller.vue'], resolve)
+  }
+},
+{
+  path: '/component/pulldown',
+  component: function (resolve) {
+    require(['./demos/Pulldown.vue'], resolve)
+  }
+},
+{
+  path: '/component/pullup',
+  component: function (resolve) {
+    require(['./demos/Pullup.vue'], resolve)
+  }
+},
+{
+  path: '/component/pulldown-pullup',
+  component: function (resolve) {
+    require(['./demos/PulldownPullup.vue'], resolve)
+  }
+},
+{
+  path: '/component/toast',
+  component: function (resolve) {
+    require(['./demos/Toast.vue'], resolve)
+  }
+},
+{
+  path: '/component/reddot',
+  component: function (resolve) {
+    require(['./demos/Reddot.vue'], resolve)
+  }
+},
+{
+  path: '/component/divider',
+  component: function (resolve) {
+    require(['./demos/Divider.vue'], resolve)
+  }
+},
+{
+  path: '/component/checklist',
+  component: function (resolve) {
+    require(['./demos/Checklist.vue'], resolve)
+  }
+},
+{
+  path: '/component/issue702',
+  component: function (resolve) {
+    require(['./demos/Issue702.vue'], resolve)
+  }
+},
+{
+  path: '/component/selector',
+  component: function (resolve) {
+    require(['./demos/Selector.vue'], resolve)
+  }
+},
+{
+  path: '/component/panel',
+  component: function (resolve) {
+    require(['./demos/Panel.vue'], resolve)
+  }
+},
+{
+  path: '/component/inline-calendar',
+  component: function (resolve) {
+    require(['./demos/InlineCalendar.vue'], resolve)
+  }
+},
+{
+  path: '/component/datetime',
+  component: function (resolve) {
+    require(['./demos/Datetime.vue'], resolve)
+  }
+},
+{
+  path: '/component/range',
+  component: function (resolve) {
+    require(['./demos/Range.vue'], resolve)
+  }
+},
+{
+  path: '/component/rater',
+  component: function (resolve) {
+    require(['./demos/Rater.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-button',
+  component: function (resolve) {
+    require(['./demos/XButton.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-input',
+  component: function (resolve) {
+    require(['./demos/XInput.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-textarea',
+  component: function (resolve) {
+    require(['./demos/XTextarea.vue'], resolve)
+  }
+},
+{
+  path: '/component/loading',
+  component: function (resolve) {
+    require(['./demos/Loading.vue'], resolve)
+  }
+},
+{
+  path: '/component/popover',
+  component: function (resolve) {
+    require(['./demos/Popover.vue'], resolve)
+  }
+},
+{
+  path: '/component/countup',
+  component: function (resolve) {
+    require(['./demos/Countup.vue'], resolve)
+  }
+},
+{
+  path: '/component/countdown',
+  component: function (resolve) {
+    require(['./demos/Countdown.vue'], resolve)
+  }
+},
+{
+  path: '/component/clocker',
+  component: function (resolve) {
+    require(['./demos/Clocker.vue'], resolve)
+  }
+},
+{
+  path: '/component/flexbox',
+  component: function (resolve) {
+    require(['./demos/Flexbox.vue'], resolve)
+  }
+},
+{
+  path: '/component/icon',
+  component: function (resolve) {
+    require(['./demos/Icon.vue'], resolve)
+  }
+},
+{
+  path: '/component/card',
+  component: function (resolve) {
+    require(['./demos/Card.vue'], resolve)
+  }
+},
+{
+  path: '/component/previewer',
+  component: function (resolve) {
+    require(['./demos/Previewer.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-progress',
+  component: function (resolve) {
+    require(['./demos/XProgress.vue'], resolve)
+  }
+},
+{
+  path: '/component/sticky',
+  component: function (resolve) {
+    require(['./demos/Sticky.vue'], resolve)
+  }
+},
+{
+  path: '/component/search',
+  component: function (resolve) {
+    require(['./demos/Search.vue'], resolve)
+  }
+},
+{
+  path: '/component/search-static',
+  component: function (resolve) {
+    require(['./demos/SearchStatic.vue'], resolve)
+  }
+},
+{
+  path: '/component/spinner',
+  component: function (resolve) {
+    require(['./demos/Spinner.vue'], resolve)
+  }
+},
+{
+  path: '/component/timeline',
+  component: function (resolve) {
+    require(['./demos/Timeline.vue'], resolve)
+  }
+},
+{
+  path: '/component/step',
+  component: function (resolve) {
+    require(['./demos/Step.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-header',
+  component: function (resolve) {
+    require(['./demos/XHeader.vue'], resolve)
+  }
+},
+{
+  path: '/component/qrcode',
+  component: function (resolve) {
+    require(['./demos/Qrcode.vue'], resolve)
+  }
+},
+{
+  path: '/component/masker',
+  component: function (resolve) {
+    require(['./demos/Masker.vue'], resolve)
+  }
+},
+{
+  path: '/component/close',
+  component: function (resolve) {
+    require(['./demos/Close.vue'], resolve)
+  }
+},
+{
+  path: '/component/center',
+  component: function (resolve) {
+    require(['./demos/Center.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-img',
+  component: function (resolve) {
+    require(['./demos/XImg.vue'], resolve)
+  }
+},
+{
+  path: '/component/wechat-emotion',
+  component: function (resolve) {
+    require(['./demos/WechatEmotion.vue'], resolve)
+  }
+},
+{
+  path: '/component/color-picker',
+  component: function (resolve) {
+    require(['./demos/ColorPicker.vue'], resolve)
+  }
+},
+{
+  path: '/component/form-preview',
+  component: function (resolve) {
+    require(['./demos/FormPreview.vue'], resolve)
+  }
+},
+{
+  path: '/component/load-more',
+  component: function (resolve) {
+    require(['./demos/LoadMore.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-full',
+  component: function (resolve) {
+    require(['./demos/ScrollerFull.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-header',
+  component: function (resolve) {
+    require(['./demos/ScrollerHeader.vue'], resolve)
+  }
+},
+{
+  path: '/component/grid',
+  component: function (resolve) {
+    require(['./demos/Grid.vue'], resolve)
+  }
+},
+{
+  path: '/component/group',
+  component: function (resolve) {
+    require(['./demos/Group.vue'], resolve)
+  }
+},
+{
+  path: '/component/view-box',
+  component: function (resolve) {
+    require(['./demos/ViewBox.vue'], resolve)
+  }
+},
+{
+  path: '/',
+  component: function (resolve) {
+    require(['./demos/Home.vue'], resolve)
+  }
+},
+{
+  path: '/project/donate',
+  component: function (resolve) {
+    require(['./demos/Donate.vue'], resolve)
+  }
+},
+{
+  path: '/demo',
+  component: function (resolve) {
+    require(['./demos/Demo.vue'], resolve)
+  }
+},
+{
+  path: '/component/format-time',
+  component: function (resolve) {
+    require(['./demos/FormatTime.vue'], resolve)
+  }
+},
+{
+  path: '/component/uploader',
+  component: function (resolve) {
+    require(['./demos/Uploader.vue'], resolve)
+  }
+},
+{
+  path: '/issue/833',
+  component: function (resolve) {
+    require(['./demos/Issue833.vue'], resolve)
+  }
+},
+{
+  path: '/issue/471',
+  component: function (resolve) {
+    require(['./demos/Issue471.vue'], resolve)
+  }
+},
+{
+  path: '/issue/598',
+  component: function (resolve) {
+    require(['./demos/Issue598.vue'], resolve)
+  }
+},
+{
+  path: '/issue/624',
+  component: function (resolve) {
+    require(['./demos/Issue624.vue'], resolve)
+  }
+},
+{
+  path: '/issue/649',
+  component: function (resolve) {
+    require(['./demos/Issue649.vue'], resolve)
+  }
+},
+{
+  path: '/issue/865',
+  component: function (resolve) {
+    require(['./demos/Issue865.vue'], resolve)
+  }
+},
+{
+  path: '/component/swipeout',
+  component: function (resolve) {
+    require(['./demos/Swipeout.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar-simple',
+  component: function (resolve) {
+    require(['./demos/TabbarSimple.vue'], resolve)
+  }
+},
+{
+  path: '/plugin/device',
+  component: function (resolve) {
+    require(['./demos/Device.vue'], resolve)
+  }
+},
+{
+  path: '/component/agree',
+  component: function (resolve) {
+    require(['./demos/Agree.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-hr',
+  component: function (resolve) {
+    require(['./demos/XHr.vue'], resolve)
+  }
+},
+{
+  path: '/component/marquee',
+  component: function (resolve) {
+    require(['./demos/Marquee.vue'], resolve)
+  }
+},
+{
+  path: '/component/msg',
+  component: function (resolve) {
+    require(['./demos/Msg.vue'], resolve)
+  }
+},
+{
+  path: '/component/wepay-input',
+  component: function (resolve) {
+    require(['./demos/WepayInput.vue'], resolve)
+  }
+},
+{
+  path: '/component/cell-box',
+  component: function (resolve) {
+    require(['./demos/CellBox.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-icon',
+  component: function (resolve) {
+    require(['./demos/XIcon.vue'], resolve)
+  }
+},
+{
+  path: '/component/scroller-swiper',
+  component: function (resolve) {
+    require(['./demos/ScrollerSwiper.vue'], resolve)
+  }
+},
+{
+  path: '/component/tabbar-icon',
+  component: function (resolve) {
+    require(['./demos/TabbarIcon.vue'], resolve)
+  }
+},
+{
+  path: '/component/datetime-range',
+  component: function (resolve) {
+    require(['./demos/DatetimeRange.vue'], resolve)
+  }
+},
+{
+  path: '/demo/x-img-scroller',
+  component: function (resolve) {
+    require(['./demos/XImgScroller.vue'], resolve)
+  }
+},
+{
+  path: '/component/cell-form-preview',
+  component: function (resolve) {
+    require(['./demos/CellFormPreview.vue'], resolve)
+  }
+},
+{
+  path: '/issue/1211',
+  component: function (resolve) {
+    require(['./demos/Issue1211.vue'], resolve)
+  }
+},
+{
+  path: '/component/x-table',
+  component: function (resolve) {
+    require(['./demos/XTable.vue'], resolve)
+  }
+},
+{
+  path: '/component/popup-radio',
+  component: function (resolve) {
+    require(['./demos/PopupRadio.vue'], resolve)
+  }
+},
+{
+  path: '/component/flow',
+  component: function (resolve) {
+    require(['./demos/Flow.vue'], resolve)
+  }
+},
+{
+  path: '/component/inline-loading',
+  component: function (resolve) {
+    require(['./demos/InlineLoading.vue'], resolve)
+  }
+},
+{
+  path: '/demo/inline-calendar-each-day-slot',
+  component: function (resolve) {
+    require(['./demos/InlineCalendarEachDaySlot.vue'], resolve)
+  }
+},
+{
+  path: '*',
+  component: function (resolve) {
+    require(['./demos/NotFoundComponent.vue'], resolve)
+  }
+}]
+
+const router = new VueRouter({
+  routes
+})
+
+sync(store, router)
+
+// simple history management
+const history = window.sessionStorage
+history.clear()
+let historyCount = history.getItem('count') * 1 || 0
+history.setItem('/', 0)
+
+router.beforeEach(function (to, from, next) {
+  store.commit('updateLoadingStatus', {isLoading: true})
+
+  const toIndex = history.getItem(to.path)
+  const fromIndex = history.getItem(from.path)
+
+  if (toIndex) {
+    if (!fromIndex || parseInt(toIndex, 10) > parseInt(fromIndex, 10) || (toIndex === '0' && fromIndex === '0')) {
+      store.commit('updateDirection', {direction: 'forward'})
+    } else {
+      store.commit('updateDirection', {direction: 'reverse'})
+    }
+  } else {
+    ++historyCount
+    history.setItem('count', historyCount)
+    to.path !== '/' && history.setItem(to.path, historyCount)
+    store.commit('updateDirection', {direction: 'forward'})
+  }
+
+  if (/\/http/.test(to.path)) {
+    let url = to.path.split('http')[1]
+    window.location.href = `http${url}`
+  } else {
+    next()
+  }
+})
+
+router.afterEach(function (to) {
+  store.commit('updateLoadingStatus', {isLoading: false})
+  if (process.env.NODE_ENV === 'production') {
+    ga && ga('set', 'page', to.fullPath)
+    ga && ga('send', 'pageview')
+  }
+})
+
+new Vue({
+  store,
+  router,
+  render: h => h(App)
+}).$mount('#app')
+/**
+ * External dependencies.
+ *
+ */
+
+var mouse = require('./lib/mouse')
+var events = require('./lib/events')
+var classes = require('./lib/classes')
+var percentage = require('./lib/percentage-calc')
+
+/**
+ * Expose `Powerange`.
+ */
+
+export default Powerange
+
+/**
+ * Create Powerange object.
+ *
+ * @constructor
+ * @param {Object} element
+ * @param {Object} options
+ * @api public
+ */
+
+function Powerange (element, options) {
+  if (!(this instanceof Powerange)) return new Powerange(element, options)
+
+  this.element = element
+  this.options = options || {}
+  this.slider = this.create('span', 'range-bar')
+  this.hasAppend = false
+
+  if (this.element !== null && this.element.type === 'text') this.init()
+}
+
+/**
+ * Bind events on handle element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.bindEvents = function () {
+  this.handle = this.slider.querySelector('.range-handle')
+  this.touch = events(this.handle, this)
+  this.touch.bind('touchstart', 'onmousedown')
+  this.touch.bind('touchmove', 'onmousemove')
+  this.touch.bind('touchend', 'onmouseup')
+  this.mouse = mouse(this.handle, this)
+  this.mouse.bind()
+}
+
+/**
+ * Hide the target element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.hide = function () {
+  this.element.style.display = 'none'
+}
+
+/**
+ * Append the target after the element.
+ *
+ * @api private
+ */
+
+Powerange.prototype.append = function () {
+  if (!this.hasAppend) {
+    var slider = this.generate()
+    this.insertAfter(this.element, slider)
+  }
+  this.hasAppend = true
+}
+
+/**
+ * Generate the appropriate type of slider.
+ *
+ * @returns {Object} this.slider
+ * @api private
+ */
+
+Powerange.prototype.generate = function () {
+  var elems = {
+    'handle': {
+      'type': 'span',
+      'selector': 'range-handle'
+    },
+    'min': {
+      'type': 'span',
+      'selector': 'range-min'
+    },
+    'max': {
+      'type': 'span',
+      'selector': 'range-max'
+    },
+    'quantity': {
+      'type': 'span',
+      'selector': 'range-quantity'
+    }
+  }
+
+  for (var key in elems) {
+    if (elems.hasOwnProperty(key)) {
+      var temp = this.create(elems[key].type, elems[key].selector)
+      this.slider.appendChild(temp)
+    }
+  }
+
+  return this.slider
+}
+
+/**
+ * Create HTML element.
+ *
+ * @param {String} type
+ * @param {String} name
+ * @returns {Object} elem
+ * @api private
+ */
+
+Powerange.prototype.create = function (type, name) {
+  var elem = document.createElement(type)
+  elem.className = name
+
+  return elem
+}
+
+/**
+ * Insert element after another element.
+ *
+ * @param {Object} reference
+ * @param {Object} target
+ * @api private
+ */
+
+Powerange.prototype.insertAfter = function (reference, target) {
+  reference.parentNode.insertBefore(target, reference.nextSibling)
+}
+
+/**
+ * Set min and max values.
+ *
+ * @param {Number} min
+ * @param {Number} max
+ * @api private
+ */
+
+Powerange.prototype.setRange = function (min, max) {
+  if (typeof min === 'number' && typeof max === 'number' && !this.options.hideRange) {
+    this.slider.querySelector('.range-min').innerHTML = this.options.minHTML || min
+    this.slider.querySelector('.range-max').innerHTML = this.options.maxHTML || max
+  }
+}
+
+/**
+ * Set slider current value.
+ *
+ * @param {Number} offset
+ * @param {Number} size
+ * @api private
+ */
+
+Powerange.prototype.setValue = function (offset, size) {
+  var part = percentage.from(parseFloat(offset), size)
+  if (offset === '0px' || size === 0) {
+    value = this.options.min
+  } else {
+    var value = percentage.of(part, this.options.max - this.options.min) + this.options.min
+    value = (this.options.decimal) ? (Math.round(value * 100) / 100) : Math.round(value)
+
+    if (value > this.options.max) {
+      value = this.options.max
+    }
+  }
+
+  var changed = false
+
+  changed = this.element.value !== value
+
+  this.element.value = value
+  this.options.callback(value)
+  if (changed) this.changeEvent()
+}
+
+/**
+ * Set step.
+ *
+ * @param {Number} sliderSize
+ * @param {Number} handleSize
+ * @returns {Array} this.steps
+ * @api private
+ */
+
+Powerange.prototype.step = function (sliderSize, handleSize) {
+  var dimension = sliderSize - handleSize
+  var part = percentage.from(this.checkStep(this.options.step), this.options.max - this.options.min)
+  var interval = percentage.of(part, dimension)
+  var steps = []
+
+  for (let i = 0; i <= dimension; i += interval) {
+    steps.push(i)
+  }
+
+  this.steps = steps
+  for (let i = 10; i >= 0; i--) {
+    this.steps[steps.length - i] = dimension - interval * i
+  }
+
+  return this.steps
+}
+
+/**
+ * Check values.
+ *
+ * @param {Number} start
+ * @api private
+ */
+
+Powerange.prototype.checkValues = function (start) {
+  if (start < this.options.min) this.options.start = this.options.min
+  if (start > this.options.max) this.options.start = this.options.max
+  if (this.options.min >= this.options.max) this.options.min = this.options.max
+}
+
+/**
+ * Make sure `step` is positive.
+ *
+ * @param {Number} value
+ * @returns {Number} this.options.step
+ * @api private
+ */
+
+Powerange.prototype.checkStep = function (value) {
+  if (value < 0) value = Math.abs(value)
+  this.options.step = value
+  return this.options.step
+}
+
+/**
+ * Disable range slider.
+ *
+ * @api private
+ */
+
+Powerange.prototype.disable = function (force) {
+  if (this.options.disable || force) {
+    this.mouse.unbind()
+    this.touch.unbind()
+  }
+  if (this.options.disable) {
+    if (this.options.disableOpacity) {
+      this.slider.style.opacity = this.options.disableOpacity
+    }
+    classes(this.slider).add('range-bar-disabled')
+  }
+}
+
+/**
+ * Make element unselectable.
+ *
+ * @param {Object} element
+ * @param {Boolean} set
+ * @api private
+ */
+
+Powerange.prototype.unselectable = function (element, set) {
+  if (!classes(this.slider).has('unselectable') && set === true) {
+    classes(this.slider).add('unselectable')
+  } else {
+    classes(this.slider).remove('unselectable')
+  }
+}
+
+/**
+ * Handle the onchange event.
+ *
+ * @param {Boolean} state
+ * @api private
+ */
+
+Powerange.prototype.changeEvent = function (state) {
+  if (typeof Event === 'function' || !document.fireEvent) {
+    var event = document.createEvent('HTMLEvents')
+    event.initEvent('change', false, true)
+    this.element.dispatchEvent(event)
+  } else {
+    this.element.fireEvent('onchange')
+  }
+}
+
+/**
+ * Initialize main class.
+ *
+ * @api private
+ */
+
+Powerange.prototype.init = function () {
+  this.hide()
+  this.append()
+  this.bindEvents()
+  this.checkValues(this.options.start)
+  this.setRange(this.options.min, this.options.max)
+  this.disable()
+}
+
+Powerange.prototype.reInit = function (opts) {
+  this.options.start = opts.value
+  this.options.min = opts.min
+  this.options.max = opts.max
+  this.options.step = opts.step
+  this.disable(true)
+  this.init()
+}
+
